@@ -1,8 +1,10 @@
 # RC 語音歷史紀錄解密工具
 
+[English](README.md) · [更新紀錄](CHANGELOG.md)
+
 將 RC 語音的加密聊天紀錄檔案 `*.dat` 解密並轉換成標準的 SQLite 資料庫格式，讓你可以使用一般工具開啟查看。
 
-此腳本是透過靜態分析 `raidcall.exe` 和 `SQLite.dll` 而得：
+本工具的解密方式是透過靜態分析 `raidcall.exe` 和 `SQLite.dll` 還原而得：
 - `raidcall.exe` 會從帳號字串衍生出**明文金鑰**
 - `SQLite.dll` 使用 **SHA1(key_bytes) 衍生 RC4 金鑰**，並透過 Windows CryptoAPI 解密每個 SQLite 頁面
 
@@ -14,35 +16,59 @@
 
 ## 環境需求
 
-- Windows
-- Python 3.x
+- Windows 或 Linux
+- 從原始碼編譯時需要穩定版 Rust 工具鏈
+- 使用桌面 GUI 時，系統須具備相關圖形／檔案對話框函式庫及適用的 Vulkan、Direct3D 12（Windows）或 OpenGL
+
+**執行解密器不需要 Python。** 本文件後半段的 Python 程式碼只是讀取 SQLite 或處理圖片快取的選用範例。
+
+## 編譯方式
+
+編譯桌面 GUI：
+
+```sh
+cargo build --release --features gui --bin raidcall-gui
+```
+
+編譯命令列程式：
+
+```sh
+cargo build --release --bin rc-dat-decrypt
+```
+
+執行檔會產生在 `target/release/`（Windows 為 `.exe`）。Windows 版若要嵌入執行檔圖標，還需要對應的資源編譯器。
+
+## 在 VS Code 中編譯
+
+使用 VS Code 開啟專案目錄，按下 **Ctrl+Shift+B** 即可執行原生系統的 Release 編譯。從「終端機 → 執行工作」可選擇原生 Debug、Windows x64、Linux 或雙平台 Release；**Run: Native GUI (Debug)** 可編譯並啟動桌面程式。F5 偵錯組態也會先執行原生 Debug 建置。
+
+這些工作透過隨附的 `.vscode/build.py` 選擇建置工具鏈，因此**只有使用 VS Code 建置工作時需要 Python 3.10 以上版本**，編譯後的解密工具本身不需要 Python。Windows 編譯 Linux 版本需有 WSL2，並在 WSL 內安裝 Rust 和 Python 3；Linux 編譯 Windows x64 需安裝 `x86_64-pc-windows-gnu` Rust 目標與 MinGW-w64（含 `gcc`、`windres`）。若直接執行上面的 Cargo 指令則不需要 Python。
 
 ## 基本使用方式
 
-執行腳本並指向你的 `*.dat` 檔案：
+執行 `raidcall-gui`（Windows 為 `raidcall-gui.exe`），選擇 Windows 上偵測到的帳號或手動瀏覽 `.dat`，確認原始帳號與輸出位置，再按「開始解密」。GUI 支援繁體中文與英文、縮小視窗時捲動、解密進度顯示及覆寫確認。
+
+也可以直接使用 Rust 命令列程式：
 
 ```bat
-python rc_dat_decrypt.py "%APPDATA%\RCTW\<account>@raidcall.com.tw\<account>@raidcall.com.tw.dat" --force
+rc-dat-decrypt "%APPDATA%\RCTW\<account>@raidcall.com.tw\<account>@raidcall.com.tw.dat" --force
 ```
 
-預設輸出：解密後的 `*.sqlite` 檔案會儲存在**腳本所在目錄**：
-
-```text
-<account>@raidcall.com.tw.sqlite
-```
+預設會在**輸入檔所在位置**產生同名的 `<account>@raidcall.com.tw.sqlite3`，而不是輸出到程式所在目錄。
 
 ## 如果 `.dat` 檔名不是帳號名稱
 
-腳本預設會假設 `--account` 參數是 `.dat` 檔案的主檔名（例如 `<account>@raidcall.com.tw`）。
+命令列程式預設會假設 `--account` 參數是 `.dat` 檔案的主檔名（例如 `<account>@raidcall.com.tw`）。
 如果你要解密的檔案名稱是 `Popup.dat` 或 `olConfig.dat` 之類的，請明確指定正確的帳號：
 
 ```bat
-python rc_dat_decrypt.py "%APPDATA%\RCTW\temp\Popup.dat" --account "<account>@raidcall.com.tw" --out "Popup.sqlite" --force
+rc-dat-decrypt "%APPDATA%\RCTW\temp\Popup.dat" --account "<account>@raidcall.com.tw" --out "Popup.sqlite3" --force
 ```
 
 
 ## 參數選項
 
+- `--account <name>`：指定原始帳號（未提供時使用輸入檔的主檔名）
 - `--out <path>`: 指定輸出檔案路徑
 - `--force`: 強制覆蓋已存在的檔案
 - `--no-verify`: 跳過檢查解密後的標頭是否為 `SQLite format 3\0`（不建議使用）
@@ -57,7 +83,7 @@ python rc_dat_decrypt.py "%APPDATA%\RCTW\temp\Popup.dat" --account "<account>@ra
 
 ```python
 import sqlite3
-con = sqlite3.connect(r"%USERPROFILE%\Documents\<account>@raidcall.com.tw.sqlite")
+con = sqlite3.connect(r"%USERPROFILE%\Documents\<account>@raidcall.com.tw.sqlite3")
 cur = con.cursor()
 cur.execute("select name from sqlite_master where type='table' order by name")
 print(cur.fetchall())
@@ -111,7 +137,7 @@ import hashlib, os, re, shutil, sqlite3
 from pathlib import Path
 
 account = "<account>@raidcall.com.tw"
-db = Path(os.environ["USERPROFILE"]) / "Documents" / f"{account}.sqlite"
+db = Path(os.environ["USERPROFILE"]) / "Documents" / f"{account}.sqlite3"
 cache = Path(os.environ["APPDATA"]) / "RCTW" / account / "ChatImage"
 out = Path(os.environ["USERPROFILE"]) / "Documents" / f"{account}_ChatImage_export"
 out.mkdir(parents=True, exist_ok=True)
@@ -154,8 +180,7 @@ con.close()
 - `0..9` 映射到 `a..j`
 - 其他字元映射為 `1`
 
-衍生出的金鑰會以 **ASCII 位元組**形式傳入 `SQLite.dll` 的 `sqlite3_key_interop` 函式，  
-該函式使用 `CryptCreateHash(CALG_SHA1)` 和 `CryptDeriveKey(CALG_RC4)`，然後用 `CryptDecrypt` 解密每個頁面。
+在原始用戶端中，衍生出的金鑰會以 **ASCII 位元組**傳入 `SQLite.dll` 的 `sqlite3_key_interop`，由 `CryptCreateHash(CALG_SHA1)`、`CryptDeriveKey(CALG_RC4)` 和 `CryptDecrypt` 處理每個頁面。目前的 Rust 版本獨立實作相容的 SHA-1／RC4 流程，不需要 Windows CryptoAPI。
 
 ---
 

@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Decryptor GUI (Linux)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/raidcall-gui",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "Build: Native (Debug)",
+      "env": {}
+    },
+    {
+      "name": "Debug Decryptor GUI (Windows)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/raidcall-gui.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "Build: Native (Debug)",
+      "externalConsole": false
+    }
+  ]
+}

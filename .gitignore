@@ -1,0 +1,36 @@
+# Rust build outputs
+/target/
+/Cargo.lock
+
+# Encrypted source files and decrypted database copies
+*.dat
+*.sqlite
+*.sqlite3
+*.db
+*.db3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Temporary files, logs and crash dumps
+*.bak
+*.tmp
+*.log
+*.dmp
+
+# Python build helper caches / local environments
+__pycache__/
+*.py[cod]
+.venv/
+
+# Editor and operating-system local files
+.idea/
+.vscode/.history/
+.DS_Store
+Thumbs.db

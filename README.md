@@ -1,10 +1,10 @@
 # RaidCall History Decryptor
 
-[繁體中文 README](README.zh-TW.md)
+[繁體中文 README](README.zh-TW.md) · [Changelog](CHANGELOG.md)
 
 Decrypts RaidCall `*.dat` chat/history files into a normal SQLite database you can open with standard tools.
 
-This script was derived from static analysis of `raidcall.exe` + `SQLite.dll`:
+The decryption method was recovered through static analysis of `raidcall.exe` and `SQLite.dll`:
 - `raidcall.exe` derives the **plaintext key** from the account string.
 - `SQLite.dll` derives an **RC4 key from SHA1(key_bytes)** and decrypts each SQLite page via CryptoAPI.
 
@@ -15,37 +15,62 @@ If there are any copyright concerns, please contact us and this tool will be rem
 
 ## Requirements
 
-- Windows
-- Python 3.x
+- Windows or Linux
+- Stable Rust toolchain to build from source
+- GUI system libraries and a suitable Vulkan, Direct3D 12 (Windows), or OpenGL renderer when running the desktop application
+
+Python is **not** required to run the decryptor. The Python snippets later in this README are optional examples for examining SQLite databases and cached images.
+
+## Build
+
+Desktop GUI:
+
+```sh
+cargo build --release --features gui --bin raidcall-gui
+```
+
+Command-line executable:
+
+```sh
+cargo build --release --bin rc-dat-decrypt
+```
+
+Binaries are written to `target/release/` (`.exe` on Windows). The Windows build additionally needs a resource compiler for the executable icon.
+
+## Building with VS Code
+
+Open the repository folder in VS Code, then press **Ctrl+Shift+B** for the native Release build. Use **Terminal → Run Task** to choose native Debug, Windows x64, Linux, or both Release targets. **Run: Native GUI (Debug)** builds and launches the desktop application. The F5 launch configurations use the native Debug task.
+
+These VS Code tasks use the included `.vscode/build.py` helper and require Python 3.10+ **only for build-task routing**, not to run the compiled decryptor. On Windows, compiling Linux targets uses WSL2 with its own Rust and Python 3 installations. On Linux, compiling Windows x64 requires the Rust `x86_64-pc-windows-gnu` target and MinGW-w64, including `gcc` and `windres`. You can also build directly with the Cargo commands above without Python.
 
 ## Basic usage
 
-Run the script and point it at an `*.dat` file:
+Launch `raidcall-gui` (`raidcall-gui.exe` on Windows). Select an account from the Windows account list or browse to a `.dat` file, confirm the original account, choose the destination, and click **Decrypt**. The GUI supports Traditional Chinese and English, scrolling in smaller windows, progress reporting, and overwrite confirmation.
+
+You can also use the Rust command-line program:
 
 ```bat
-python rc_dat_decrypt.py "%APPDATA%\RCTW\<account>@raidcall.com.tw\<account>@raidcall.com.tw.dat" --force
+rc-dat-decrypt "%APPDATA%\RCTW\<account>@raidcall.com.tw\<account>@raidcall.com.tw.dat" --force
 ```
 
-Output (default): a decrypted `*.sqlite` written **next to the script**:
-
-```text
-<account>@raidcall.com.tw.sqlite
-```
+By default, the output is written **beside the input file** as `<account>@raidcall.com.tw.sqlite3`, not beside the executable.
 
 ## If the `.dat` filename is not the account
 
-By default the script assumes `--account` is the `.dat` filename stem (e.g. `<account>@raidcall.com.tw`).
+By default the command-line tool assumes `--account` is the `.dat` filename stem (e.g. `<account>@raidcall.com.tw`).
 If you are decrypting something like `Popup.dat` or `olConfig.dat`, pass the correct account explicitly:
 
 ```bat
-python rc_dat_decrypt.py "%APPDATA%\RCTW\temp\Popup.dat" --account "<account>@raidcall.com.tw" --out "Popup.sqlite" --force
+rc-dat-decrypt "%APPDATA%\RCTW\temp\Popup.dat" --account "<account>@raidcall.com.tw" --out "Popup.sqlite3" --force
 ```
 
 ## Options
 
+- `--account <name>`: supply the original account name (otherwise inferred from the input filename)
 - `--out <path>`: choose output file path
 - `--force`: overwrite output if it already exists
 - `--no-verify`: skips checking that the decrypted header starts with `SQLite format 3\0` (not recommended)
+- `--help`: display usage information
 
 ## Opening / reading the decrypted DB
 
@@ -57,7 +82,7 @@ You can open the output with:
 
 ```python
 import sqlite3
-con = sqlite3.connect(r"%USERPROFILE%\Documents\<account>@raidcall.com.tw.sqlite")
+con = sqlite3.connect(r"%USERPROFILE%\Documents\<account>@raidcall.com.tw.sqlite3")
 cur = con.cursor()
 cur.execute("select name from sqlite_master where type='table' order by name")
 print(cur.fetchall())
@@ -111,7 +136,7 @@ import hashlib, os, re, shutil, sqlite3
 from pathlib import Path
 
 account = "<account>@raidcall.com.tw"
-db = Path(os.environ["USERPROFILE"]) / "Documents" / f"{account}.sqlite"
+db = Path(os.environ["USERPROFILE"]) / "Documents" / f"{account}.sqlite3"
 cache = Path(os.environ["APPDATA"]) / "RCTW" / account / "ChatImage"
 out = Path(os.environ["USERPROFILE"]) / "Documents" / f"{account}_ChatImage_export"
 out.mkdir(parents=True, exist_ok=True)
@@ -152,8 +177,7 @@ The plaintext key is derived from the substring **before `@`** in the account:
 - `0..9` map to `a..j`
 - other characters map to `1`
 
-That derived key is passed as **ASCII bytes** into `SQLite.dll`'s `sqlite3_key_interop`,
-which uses `CryptCreateHash(CALG_SHA1)` + `CryptDeriveKey(CALG_RC4)` and then decrypts each page with `CryptDecrypt`.
+In the original client, that derived key is passed as **ASCII bytes** into `SQLite.dll`'s `sqlite3_key_interop`, which uses `CryptCreateHash(CALG_SHA1)` and `CryptDeriveKey(CALG_RC4)` before decrypting each page with `CryptDecrypt`. The Rust edition implements the compatible SHA-1/RC4 process without requiring Windows CryptoAPI.
 
 ---
 
